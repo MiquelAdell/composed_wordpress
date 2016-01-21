@@ -34,9 +34,6 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 
 
 #~~~ VOLUMES ~~~#
-
-VOLUME /var/www/html/
-
 RUN mkdir /tmp/html
 WORKDIR /tmp/html
 
@@ -56,11 +53,6 @@ COPY files/wordpress/post-install-script.sh wordpress/post-install-script.sh
 
 RUN chown -R www-data:www-data /tmp/html
 
-ONBUILD RUN wordpress/post-install-script.sh
- 
-ONBUILD RUN sed '/WP_DEBUG/ r wordpress/wp-config-custom.php' wordpress/wp-config.php > wordpress/tmp \
-  && mv wordpress/tmp wordpress/wp-config.php \
-  && rm wordpress/wp-config-custom.php
 
 
 
@@ -68,6 +60,14 @@ ONBUILD RUN sed '/WP_DEBUG/ r wordpress/wp-config-custom.php' wordpress/wp-confi
 
 WORKDIR /tmp/html
 
-ONBUILD RUN rsync --ignore-existing -a /tmp/html/ .
-ONBUILD RUN chown -R www-data:www-data /var/www/html
-ONBUILD RUN rm -rf /tmp/html/
+RUN rsync --ignore-existing --archive --verbose --human-readable --progress /tmp/html/ .
+RUN chown -R www-data:www-data /var/www/html
+RUN rm -rf /tmp/html/
+
+ONBUILD RUN wordpress/post-install-script.sh
+
+ONBUILD RUN sed '/WP_DEBUG/ r wordpress/wp-config-custom.php' wordpress/wp-config.php > wordpress/tmp \
+&& mv wordpress/tmp wordpress/wp-config.php \
+&& rm wordpress/wp-config-custom.php
+
+ONBUILD VOLUME /var/www/html/
