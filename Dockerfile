@@ -1,43 +1,73 @@
-FROM php:5.6-fpm
+#~~~ INFORMATION ~~~#
+# VERSION 0.0.2
+
+# based on
+# https://hub.docker.com/r/richarvey/nginx-php-fpm/
+# and
+# https://hub.docker.com/_/wordpress/
+
+FROM php:7.0.2-apache
+
 MAINTAINER Miquel Adell <miquel@miqueladell.com>
 
-# install the PHP extensions we need
-RUN apt-get update && apt-get install -y libpng12-dev libjpeg-dev && rm -rf /var/lib/apt/lists/* \
-	&& docker-php-ext-configure gd --with-png-dir=/usr --with-jpeg-dir=/usr \
-	&& docker-php-ext-install gd mysqli opcache
+ENV WORDPRESS_VERSION 4.4.1 #can we do that dynamic?
 
-# set recommended PHP.ini settings
-# see https://secure.php.net/manual/en/opcache.installation.php
-RUN { \
-		echo 'opcache.memory_consumption=128'; \
-		echo 'opcache.interned_strings_buffer=8'; \
-		echo 'opcache.max_accelerated_files=4000'; \
-		echo 'opcache.revalidate_freq=60'; \
-		echo 'opcache.fast_shutdown=1'; \
-		echo 'opcache.enable_cli=1'; \
-	} > /usr/local/etc/php/conf.d/opcache-recommended.ini
 
-VOLUME /var/www/html
 
-ENV WORDPRESS_VERSION 4.4.1
-ENV WORDPRESS_SHA1 be7224551b45fdddf696142b4f4a6f609b57e323
+#~~~ DEPENDENCIES ~~~#
 
-RUN curl -o wordpress.tar.gz -SL https://github.com/johnpbloch/wordpress/archive/${WORDPRESS_VERSION}.tar.gz \
-	&& echo "${WORDPRESS_SHA1} *wordpress.tar.gz" | sha1sum -c - \
-	&& tar -xzf wordpress.tar.gz -C /usr/src/ \
-	&& mv /usr/src/wordpress-${WORDPRESS_VERSION} /usr/src/wordpress \
-	&& rm wordpress.tar.gz \
-	&& chown -R www-data:www-data /usr/src/wordpress
+# Add PHP repository to apt source
+RUN apt-get update \
+    && apt-get install -y \
+        libpng12-dev \
+        libjpeg-dev  \
+        curl \
+        sed \
+        zlib1g-dev \
+        rsync \
+    && docker-php-ext-install \
+        zip \
+        mysqli
 
-COPY docker-wp-config.custom.php /var/www/html/wp-config.custom.php
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
-COPY docker-entrypoint.sh /entrypoint.sh
 
-# grr, ENTRYPOINT resets CMD now
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["php-fpm"]
 
-ONBUILD RUN sed '/WP_DEBUG/ r /var/www/html/wp-config.custom.php' /var/www/html/wp-config.php > /var/www/html/tmp \
-    && mv /var/www/html/tmp /var/www/html/wp-config.php
+#~~~ VOLUMES ~~~#
 
-ONBUILD RUN rm /var/www/html/wp-config.custom.php
+VOLUME /var/www/html/
+
+RUN mkdir /tmp/html
+WORKDIR /tmp/html
+
+
+
+
+#~~~ WORDPRESS ~~~#
+
+COPY files/composer.json composer.json
+RUN composer update
+
+#~ COPY BASE FILES ~#
+COPY files/.gitignore .gitignore
+COPY files/index.php index.php
+COPY files/wordpress/wp-config-custom.php wordpress/wp-config-custom.php
+COPY files/wordpress/post-install-script.sh wordpress/post-install-script.sh
+
+RUN chown -R www-data:www-data /tmp/html
+
+ONBUILD RUN wordpress/post-install-script.sh
+ 
+ONBUILD RUN sed '/WP_DEBUG/ r wordpress/wp-config-custom.php' wordpress/wp-config.php > wordpress/tmp \
+  && mv wordpress/tmp wordpress/wp-config.php \
+  && rm wordpress/wp-config-custom.php
+
+
+
+#~~~ MOVE FILES TO THE VOLUME ~~~#
+
+WORKDIR /tmp/html
+
+ONBUILD RUN rsync --ignore-existing -a /tmp/html/ .
+ONBUILD RUN chown -R www-data:www-data /var/www/html
+ONBUILD RUN rm -rf /tmp/html/
