@@ -55,12 +55,10 @@ RUN chown -R www-data:www-data /tmp/html
 
 
 
-
 #~~~ MOVE FILES TO THE VOLUME ~~~#
+VOLUME /var/www/html/
 
-WORKDIR /tmp/html
-
-RUN rsync --ignore-existing --archive --verbose --human-readable --progress /tmp/html/ .
+RUN rsync --ignore-existing --archive --verbose --human-readable --progress /tmp/html/ /var/www/html/
 RUN chown -R www-data:www-data /var/www/html
 RUN rm -rf /tmp/html/
 
@@ -69,5 +67,3 @@ ONBUILD RUN wordpress/post-install-script.sh
 ONBUILD RUN sed '/WP_DEBUG/ r wordpress/wp-config-custom.php' wordpress/wp-config.php > wordpress/tmp \
 && mv wordpress/tmp wordpress/wp-config.php \
 && rm wordpress/wp-config-custom.php
-
-ONBUILD VOLUME /var/www/html/
