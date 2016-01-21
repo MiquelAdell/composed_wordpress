@@ -34,9 +34,9 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 
 
 #~~~ VOLUMES ~~~#
+
 RUN mkdir /tmp/html
 WORKDIR /tmp/html
-
 
 
 
@@ -56,7 +56,8 @@ RUN chown -R www-data:www-data /tmp/html
 
 
 #~~~ MOVE FILES TO THE VOLUME ~~~#
-# VOLUME /var/www/html/
+
+VOLUME /var/www/html/
 
 RUN rsync --ignore-existing --archive --verbose --human-readable --progress /tmp/html/ /var/www/html/
 RUN chown -R www-data:www-data /var/www/html
