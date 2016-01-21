@@ -23,6 +23,7 @@ RUN apt-get update \
         curl \
         sed \
         zlib1g-dev \
+        rsync \
     && docker-php-ext-install \
         zip \
         mysqli
@@ -31,30 +32,41 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 
 
 
-#~~~ DIRS ~~~#
+#~~~ VOLUMES ~~~#
 
-WORKDIR /var/www/html/
-# VOLUME /var/www/html/
+VOLUME /var/www/html/
+
+RUN mkdir /tmp/html
+WORKDIR /tmp/html
+
 
 
 
 #~~~ WORDPRESS ~~~#
 
 COPY files/composer.json composer.json
-ONBUILD RUN composer update
+RUN composer update
 
 #~ COPY BASE FILES ~#
-# ONBUILD COPY files/.gitignore .gitignore
-# ONBUILD COPY files/index.php index.php
-# ONBUILD COPY files/wordpress/wp-config-custom.php wordpress/wp-config-custom.php
-# ONBUILD COPY files/post-install-script.sh /var/www/html/wordpress/post-install-script.sh
-#
-# ONBUILD RUN /var/www/html/wordpress/post-install-script.sh
-#
-# ONBUILD RUN RUN chown -R www-data:www-data /var/www/html
-#
-# ONBUILD RUN RUN sed '/WP_DEBUG/ r /var/www/html/wordpress/wp-config-custom.php' /var/www/html/wordpress/wp-config.php > /var/www/html/wordpress/tmp \
-#   && mv /var/www/html/wordpress/tmp /var/www/html/wordpress/wp-config.php \
-#   && rm /var/www/html/wordpress/wp-config-custom.php
-#
-# ONBUILD RUN chown -R www-data:www-data /var/www/html
+COPY files/.gitignore .gitignore
+COPY files/index.php index.php
+COPY files/wordpress/wp-config-custom.php wordpress/wp-config-custom.php
+COPY files/wordpress/post-install-script.sh wordpress/post-install-script.sh
+
+RUN chown -R www-data:www-data /tmp/html
+
+ONBUILD RUN wordpress/post-install-script.sh
+ 
+ONBUILD RUN sed '/WP_DEBUG/ r wordpress/wp-config-custom.php' wordpress/wp-config.php > wordpress/tmp \
+  && mv wordpress/tmp wordpress/wp-config.php \
+  && rm wordpress/wp-config-custom.php
+
+
+
+#~~~ MOVE FILES TO THE VOLUME ~~~#
+
+WORKDIR /tmp/html
+
+ONBUILD RUN rsync --ignore-existing -a /tmp/html/ .
+ONBUILD RUN chown -R www-data:www-data /var/www/html
+ONBUILD RUN rm -rf /tmp/html/
