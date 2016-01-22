@@ -49,7 +49,6 @@ RUN composer update
 COPY files/.gitignore .gitignore
 COPY files/index.php index.php
 COPY files/wordpress/wp-config-custom.php wordpress/wp-config-custom.php
-COPY files/wordpress/post-install-script.sh wordpress/post-install-script.sh
 
 RUN chown -R www-data:www-data /tmp/html
 
@@ -58,13 +57,8 @@ RUN chown -R www-data:www-data /tmp/html
 #~~~ MOVE FILES TO THE VOLUME ~~~#
 
 VOLUME /var/www/html/
+WORKDIR /var/www/html/
 
-RUN rsync --ignore-existing --archive --verbose --human-readable --progress /tmp/html/ /var/www/html/
-RUN chown -R www-data:www-data /var/www/html
-RUN rm -rf /tmp/html/
-
-ONBUILD RUN wordpress/post-install-script.sh
-
-ONBUILD RUN sed '/WP_DEBUG/ r wordpress/wp-config-custom.php' wordpress/wp-config.php > wordpress/tmp \
-&& mv wordpress/tmp wordpress/wp-config.php \
-&& rm wordpress/wp-config-custom.php
+COPY docker-entrypoint.sh /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["php-fpm"]
