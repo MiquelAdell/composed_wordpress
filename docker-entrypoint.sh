@@ -1,13 +1,7 @@
 #!/bin/bash
-# based on https://github.com/docker-library/wordpress/blob/2877506644eec86186d32e5aac19d6737f113efa/apache/docker-entrypoint.sh
-# adapted to be run at install instead of onbuild
 set -e
+
 if [[ "$1" == apache2* ]] || [ "$1" == php-fpm ]; then
-
-	rsync --ignore-existing --archive --verbose --human-readable --progress /tmp/html/ /var/www/html/
-	chown -R www-data:www-data /var/www/html
-	rm -rf /tmp/html/
-
 	if [ -n "$MYSQL_PORT_3306_TCP" ]; then
 		if [ -z "$WORDPRESS_DB_HOST" ]; then
 			WORDPRESS_DB_HOST='mysql'
@@ -41,23 +35,64 @@ if [[ "$1" == apache2* ]] || [ "$1" == php-fpm ]; then
 		exit 1
 	fi
 
+
+
+	if [ -d "wordpress" ]; then
+		echo "WordPress found in $(pwd). Skipping copy"
+	else
+		echo >&2 "WordPress not found in $(pwd) - copying now..."
+		if [ "$(ls -A)" ]; then
+			echo >&2 "WARNING: $(pwd) is not empty - press Ctrl+C now if this is an error!"
+			( set -x; ls -A; sleep 10 )
+		fi
+
+		### MAB
+		rsync --ignore-existing --archive --human-readable /usr/src/wordpress/ /var/www/html/
+		echo >&2 "Complete! WordPress has been successfully copied to $(pwd)"
+		### MAB
+
+		if [ ! -e .htaccess ]; then
+			# NOTE: The "Indexes" option is disabled in the php:apache base image
+			cat > .htaccess <<-'EOF'
+				# BEGIN WordPress
+				<IfModule mod_rewrite.c>
+				RewriteEngine On
+				RewriteBase /
+				RewriteRule ^index\.php$ - [L]
+				RewriteCond %{REQUEST_FILENAME} !-f
+				RewriteCond %{REQUEST_FILENAME} !-d
+				RewriteRule . /index.php [L]
+				</IfModule>
+				# END WordPress
+			EOF
+			chown www-data:www-data .htaccess
+		fi
+	fi
+
 	# TODO handle WordPress upgrades magically in the same way, but only if wp-includes/version.php's $wp_version is less than /usr/src/wordpress/wp-includes/version.php's $wp_version
 
 	# version 4.4.1 decided to switch to windows line endings, that breaks our seds and awks
 	# https://github.com/docker-library/wordpress/issues/116
 	# https://github.com/WordPress/WordPress/commit/1acedc542fba2482bab88ec70d4bea4b997a92e4
-	sed -ri 's/\r\n|\r/\n/g' wp-config*
+	sed -ri 's/\r\n|\r/\n/g' wordpress/wp-config*
 
-	if [ ! -e wp-config.php ]; then
-			awk '/^\/\*.*stop editing.*\*\/$/ && c == 0 { c = 1; system("cat") } { print }' wp-config-sample.php > wp-config.php <<'EOPHP'
-	// If we're behind a proxy server and using HTTPS, we need to alert Wordpress of that fact
-	// see also http://codex.wordpress.org/Administration_Over_SSL#Using_a_Reverse_Proxy
-	if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
-		$_SERVER['HTTPS'] = 'on';
-	}
+	if [ ! -e wordpress/wp-config.php ]; then
+		awk '/^\/\*.*stop editing.*\*\/$/ && c == 0 { c = 1; system("cat") } { print }' wordpress/wp-config-sample.php > wordpress/wp-config.php <<'EOPHP'
+// If we're behind a proxy server and using HTTPS, we need to alert Wordpress of that fact
+// see also http://codex.wordpress.org/Administration_Over_SSL#Using_a_Reverse_Proxy
+if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+	$_SERVER['HTTPS'] = 'on';
+}
 
-	EOPHP
-		chown www-data:www-data wp-config.php
+EOPHP
+
+		### MAB
+		sed '/WP_DEBUG/ r wordpress/wp-config-custom.php' /var/www/html/wordpress/wp-config.php > /var/www/html/wordpress/tmp
+		mv /var/www/html/wordpress/tmp /var/www/html/wordpress/wp-config.php
+		rm /var/www/html/wordpress/wp-config-custom.php
+		### MAB
+
+		chown www-data:www-data wordpress/wp-config.php
 	fi
 
 	# see http://stackoverflow.com/a/2705678/433558
@@ -80,7 +115,7 @@ if [[ "$1" == apache2* ]] || [ "$1" == php-fpm ]; then
 			start="^(\s*)$(sed_escape_lhs "$key")\s*="
 			end=";"
 		fi
-		sed -ri "s/($start\s*).*($end)$/\1$(sed_escape_rhs "$(php_escape "$value" "$var_type")")\3/" wp-config.php
+		sed -ri "s/($start\s*).*($end)$/\1$(sed_escape_rhs "$(php_escape "$value" "$var_type")")\3/" wordpress/wp-config.php
 	}
 
 	set_config 'DB_HOST' "$WORDPRESS_DB_HOST"
@@ -106,7 +141,7 @@ if [[ "$1" == apache2* ]] || [ "$1" == php-fpm ]; then
 			set_config "$unique" "$unique_value"
 		else
 			# if not specified, let's generate a random value
-			current_set="$(sed -rn "s/define\((([\'\"])$unique\2\s*,\s*)(['\"])(.*)\3\);/\4/p" wp-config.php)"
+			current_set="$(sed -rn "s/define\((([\'\"])$unique\2\s*,\s*)(['\"])(.*)\3\);/\4/p" wordpress/wp-config.php)"
 			if [ "$current_set" = 'put your unique phrase here' ]; then
 				set_config "$unique" "$(head -c1M /dev/urandom | sha1sum | cut -d' ' -f1)"
 			fi
@@ -122,39 +157,37 @@ if [[ "$1" == apache2* ]] || [ "$1" == php-fpm ]; then
 	fi
 
 	TERM=dumb php -- "$WORDPRESS_DB_HOST" "$WORDPRESS_DB_USER" "$WORDPRESS_DB_PASSWORD" "$WORDPRESS_DB_NAME" <<'EOPHP'
-	<?php
-	// database might not exist, so let's try creating it (just to be safe)
+<?php
+// database might not exist, so let's try creating it (just to be safe)
 
-	$stderr = fopen('php://stderr', 'w');
+$stderr = fopen('php://stderr', 'w');
 
-	list($host, $port) = explode(':', $argv[1], 2);
+list($host, $port) = explode(':', $argv[1], 2);
 
-	$maxTries = 10;
-	do {
-		$mysql = new mysqli($host, $argv[2], $argv[3], '', (int)$port);
-		if ($mysql->connect_error) {
-			fwrite($stderr, "\n" . 'MySQL Connection Error: (' . $mysql->connect_errno . ') ' . $mysql->connect_error . "\n");
-			--$maxTries;
-			if ($maxTries <= 0) {
-				exit(1);
-			}
-			sleep(3);
+$maxTries = 10;
+do {
+	$mysql = new mysqli($host, $argv[2], $argv[3], '', (int)$port);
+	if ($mysql->connect_error) {
+		fwrite($stderr, "\n" . 'MySQL Connection Error: (' . $mysql->connect_errno . ') ' . $mysql->connect_error . "\n");
+		--$maxTries;
+		if ($maxTries <= 0) {
+			exit(1);
 		}
-	} while ($mysql->connect_error);
-
-	if (!$mysql->query('CREATE DATABASE IF NOT EXISTS `' . $mysql->real_escape_string($argv[4]) . '`')) {
-		fwrite($stderr, "\n" . 'MySQL "CREATE DATABASE" Error: ' . $mysql->error . "\n");
-		$mysql->close();
-		exit(1);
+		sleep(3);
 	}
+} while ($mysql->connect_error);
 
+if (!$mysql->query('CREATE DATABASE IF NOT EXISTS `' . $mysql->real_escape_string($argv[4]) . '`')) {
+	fwrite($stderr, "\n" . 'MySQL "CREATE DATABASE" Error: ' . $mysql->error . "\n");
 	$mysql->close();
-	EOPHP
+	exit(1);
+}
 
+$mysql->close();
+EOPHP
 
-	sed '/WP_DEBUG/ r wordpress/wp-config-custom.php' /var/www/html/wordpress/wp-config.php > /var/www/html/wordpress/tmp
-	mv /var/www/html/wordpress/tmp /var/www/html/wordpress/wp-config.php
-	rm /var/www/html/wordpress/wp-config-custom.php
+chown -R www-data:www-data /var/www/html
+
 fi
 
 exec "$@"
