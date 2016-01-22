@@ -1,12 +1,12 @@
 #~~~ INFORMATION ~~~#
-# VERSION 0.3.0
+# VERSION 1.0.0
 
 # based on
 # https://hub.docker.com/r/richarvey/nginx-php-fpm/
 # and
 # https://hub.docker.com/_/wordpress/
 
-FROM php:5.6-fpm
+FROM php:5.6-apache
 
 MAINTAINER Miquel Adell <miquel@miqueladell.com>
 
@@ -78,4 +78,4 @@ WORKDIR /var/www/html/
 
 COPY docker-entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["php-fpm"]
+CMD ["apache2-foreground"]

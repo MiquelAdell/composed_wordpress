@@ -1,5 +1,5 @@
 # wordpress
-* **image version 0.3.0**
+* **image version 1.0.0**
 * **wp version (4.4.1)**
 
 An adaptation of https://hub.docker.com/_/wordpress/ with composer and other modifications to better suit my needs.
