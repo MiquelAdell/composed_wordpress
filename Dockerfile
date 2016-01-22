@@ -1,5 +1,5 @@
 #~~~ INFORMATION ~~~#
-# VERSION 0.0.2
+# VERSION 0.3.0
 
 # based on
 # https://hub.docker.com/r/richarvey/nginx-php-fpm/
