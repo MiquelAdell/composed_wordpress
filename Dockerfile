@@ -20,12 +20,15 @@ ENV WORDPRESS_VERSION 4.4.1 #can we do that dynamic?
 RUN \
         apt-get update \
     &&  apt-get install -y \
+            curl \
             libpng12-dev \
             libjpeg-dev  \
-            curl \
+            nano \
+            npm \
+            rsync \
+            ruby-full \
             sed \
             zlib1g-dev \
-            rsync \
     &&  docker-php-ext-install \
             gd \
             mysqli \
@@ -35,7 +38,22 @@ RUN \
             gd --with-png-dir=/usr --with-jpeg-dir=/usr \
     &&  rm -rf /var/lib/apt/lists/*
 
+RUN export TERM=xterm
+
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+#~ Install utilities ~#
+RUN \
+        gem update --system \
+    &&  gem install \
+            sass \
+            compass \
+    &&  npm install --global --save-dev \
+            bower \
+            grunt-cli \
+            grunt-wiredep
+
+
 
 # set recommended PHP.ini settings
 # see https://secure.php.net/manual/en/opcache.installation.php
@@ -54,6 +72,8 @@ RUN { \
 
 RUN mkdir /usr/src/wordpress
 WORKDIR /usr/src/wordpress
+RUN mkdir /usr/src/www
+WORKDIR /usr/src/www
 
 
 
@@ -65,7 +85,7 @@ RUN composer update
 #~ COPY BASE FILES ~#
 COPY files/.gitignore .gitignore
 COPY files/index.php index.php
-COPY files/wordpress/wp-config-custom.php wordpress/wp-config-custom.php
+COPY files/wp-config-custom.php wordpress/wp-config-custom.php
 
 RUN chown -R www-data:www-data /usr/src/wordpress
 
@@ -73,8 +93,6 @@ RUN chown -R www-data:www-data /usr/src/wordpress
 
 #~~~ MOVE FILES TO THE VOLUME ~~~#
 
-VOLUME /var/www/html/
-WORKDIR /var/www/html/
 
 COPY docker-entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

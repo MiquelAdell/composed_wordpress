@@ -1,7 +1,8 @@
 {
   "require": {
     "php": ">=5.4",
-    "johnpbloch/wordpress": "4.4.1"
+    "johnpbloch/wordpress": "4.4.1",
+    "raveren/kint": "^1.0"
   },
   "extra": {
     "wordpress-install-dir": "wordpress"

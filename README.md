@@ -2,7 +2,13 @@
 * **image version 1.0.0**
 * **wp version (4.4.1)**
 
-An adaptation of https://hub.docker.com/_/wordpress/ with composer and other modifications to better suit my needs.
+An adaptation of https://hub.docker.com/_/wordpress/ installed via composer.
+It also has the following pre-isntalled:
+* git
+* kint
+* npm
+* bower
+* ruby
 
 Uses https://github.com/johnpbloch/wordpress/
 
