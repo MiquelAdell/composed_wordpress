@@ -38,7 +38,7 @@ RUN \
             gd --with-png-dir=/usr --with-jpeg-dir=/usr \
     &&  rm -rf /var/lib/apt/lists/*
 
-RUN export TERM=xterm
+
 
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
@@ -72,10 +72,6 @@ RUN { \
 
 RUN mkdir /usr/src/wordpress
 WORKDIR /usr/src/wordpress
-RUN mkdir /usr/src/www
-WORKDIR /usr/src/www
-
-
 
 #~~~ WORDPRESS ~~~#
 
